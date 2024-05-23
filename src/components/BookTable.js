@@ -25,12 +25,12 @@ import { useAuth } from '../context/AuthContext';
 
 const BookTable = () => {
     const [books, setBooks] = useState([]);
-    const [page, setPage] = useState(1); // Start with page 1
+    const [page, setPage] = useState(0); // Start with page 0
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [order, setOrder] = useState('asc');
     const [orderBy, setOrderBy] = useState('title');
     const [totalBooks, setTotalBooks] = useState(0);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [authorQuery, setAuthorQuery] = useState('');
     const [fetching, setFetching] = useState(false);
     const theme = useTheme();
@@ -39,16 +39,6 @@ const BookTable = () => {
     
     useEffect(() => {
         fetchBooks();
-        // Add event listener for scrolling when the component mounts
-        if (containerRef.current) {
-            containerRef.current.addEventListener('scroll', handleScroll);
-        }
-        // Remove event listener when the component unmounts
-        return () => {
-            if (containerRef.current) {
-                containerRef.current.removeEventListener('scroll', handleScroll);
-            }
-        };
     }, [page, rowsPerPage, authorQuery]);
 
     const handleScroll = () => {
@@ -70,9 +60,9 @@ const BookTable = () => {
         try {
             let data;
             if (authorQuery) {
-                data = await getBooksByAuthor(authorQuery, page, rowsPerPage);
+                data = await getBooksByAuthor(authorQuery, page + 1, rowsPerPage);
             } else {
-                data = await getBooks(page, rowsPerPage);
+                data = await getBooks(page + 1, rowsPerPage);
             }
             setTotalBooks(data.numFound);
             const bookDetails = await Promise.all(
@@ -89,7 +79,7 @@ const BookTable = () => {
                     };
                 })
             );
-            if (page === 1) {
+            if (page === 0) {
                 setBooks(bookDetails);
             } else {
                 setBooks(prevBooks => [...prevBooks, ...bookDetails]);
@@ -103,8 +93,7 @@ const BookTable = () => {
         }
     };
 
-    
-    function stableSort(array, comparator) {
+    const stableSort = (array, comparator) => {
         const stabilizedThis = array.map((el, index) => [el, index]);
         stabilizedThis.sort((a, b) => {
             const order = comparator(a[0], b[0]);
@@ -112,15 +101,15 @@ const BookTable = () => {
             return a[1] - b[1];
         });
         return stabilizedThis.map((el) => el[0]);
-    }
+    };
     
-    function getComparator(order, property) {
+    const getComparator = (order, property) => {
         return order === 'desc'
             ? (a, b) => descendingComparator(a, b, property)
             : (a, b) => -descendingComparator(a, b, property);
-    }
+    };
     
-    function descendingComparator(a, b, property) {
+    const descendingComparator = (a, b, property) => {
         if (b[property] < a[property]) {
             return -1;
         }
@@ -128,10 +117,7 @@ const BookTable = () => {
             return 1;
         }
         return 0;
-    }
-
-  
-
+    };
 
     const handleRequestSort = (property) => {
         const isAsc = orderBy === property && order === 'asc';
@@ -142,7 +128,7 @@ const BookTable = () => {
     };
 
     const createSortHandler = (property) => (event) => {
-        handleRequestSort(event, property);
+        handleRequestSort(property);
     };
 
     const handleChangePage = (event, newPage) => {
@@ -151,11 +137,11 @@ const BookTable = () => {
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
-        setPage(1); // Reset page number when rows per page changes
+        setPage(0); // Reset page number when rows per page changes
     };
 
     const handleSearch = () => {
-        setPage(1); // Reset page number when performing a new search
+        setPage(0); // Reset page number when performing a new search
         fetchBooks();
     };
 
@@ -194,7 +180,7 @@ const BookTable = () => {
                     <Search />
                 </IconButton>
                
-                    <TableContainer>
+                    <TableContainer ref={containerRef}>
                     <Table>
                         <TableHead>
                             <TableRow>
@@ -269,7 +255,7 @@ const BookTable = () => {
                     component="div"
                     count={totalBooks}
                     rowsPerPage={rowsPerPage}
-                    page={page - 1} // Adjust page number for zero-based index
+                    page={page} // Adjust page number for zero-based index
                     onPageChange={handleChangePage}
                     onRowsPerPageChange={handleChangeRowsPerPage}
                 />
