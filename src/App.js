@@ -4,6 +4,7 @@ import BookTable from './components/BookTable';
 
 import Login from './components/Login';
 import Navbar from './components/Navbar';
+import { BrowserRouter as Router, useNavigate } from 'react-router-dom';
 
 const App = () => {
     const { isAuthenticated } = useAuth();
@@ -11,8 +12,10 @@ const App = () => {
     return (
       
         <div>
+             <Router>
           <Navbar/>
             {isAuthenticated ? <BookTable /> : <Login />}
+            </Router>
         </div>
     );
 };
