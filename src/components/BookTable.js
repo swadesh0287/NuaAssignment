@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { getBooksByAuthor,getBooks, getAuthorDetails } from '../services/openLibraryService';
+import React, { useEffect, useState, useRef } from 'react';
+import { getBooksByAuthor, getBooks, getAuthorDetails } from '../services/openLibraryService';
 import { useNavigate } from 'react-router-dom';
 import {
     Container,
@@ -15,44 +15,64 @@ import {
     Typography,
     Button,
     CircularProgress,
-    TextField, // Import TextField for the search input field
-    IconButton // Import IconButton for search button
+    TextField,
+    IconButton
 } from '@mui/material';
 import { CSVLink } from "react-csv";
-import { Search } from '@mui/icons-material'; // Import Search icon for the search button
+import { Search } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
 
 const BookTable = () => {
     const [books, setBooks] = useState([]);
-    const [page, setPage] = useState(0);
+    const [page, setPage] = useState(1); // Start with page 1
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [order, setOrder] = useState('asc');
     const [orderBy, setOrderBy] = useState('title');
     const [totalBooks, setTotalBooks] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [fetching, setFetching] = useState(false); // Add state for fetching additional data
-    const [authorQuery, setAuthorQuery] = useState(''); // State to store the author search query
-
-    useEffect(() => {
-        fetchBooks();
-    }, [page, rowsPerPage, authorQuery]); // Include authorQuery in the dependency array to trigger fetchBooks when the authorQuery changes
-
-
+    const [authorQuery, setAuthorQuery] = useState('');
+    const [fetching, setFetching] = useState(false);
     const theme = useTheme();
     const navigate = useNavigate();
+    const containerRef = useRef(null); // Ref for the container element
+    
+    useEffect(() => {
+        fetchBooks();
+        // Add event listener for scrolling when the component mounts
+        if (containerRef.current) {
+            containerRef.current.addEventListener('scroll', handleScroll);
+        }
+        // Remove event listener when the component unmounts
+        return () => {
+            if (containerRef.current) {
+                containerRef.current.removeEventListener('scroll', handleScroll);
+            }
+        };
+    }, [page, rowsPerPage, authorQuery]);
+
+    const handleScroll = () => {
+        // Check if user has scrolled to the bottom of the container
+        if (
+            containerRef.current.scrollTop + containerRef.current.clientHeight >=
+            containerRef.current.scrollHeight - 20
+        ) {
+            // Fetch more books if not already fetching and there are more books to fetch
+            if (!fetching && books.length < totalBooks) {
+                setPage(prevPage => prevPage + 1); // Increment page
+                setFetching(true);
+            }
+        }
+    };
 
     const fetchBooks = async () => {
         setLoading(true);
-        setFetching(true);
         try {
             let data;
             if (authorQuery) {
-                // Fetch books filtered by author if authorQuery is not empty
-                data = await getBooksByAuthor(authorQuery, page + 1, rowsPerPage);
+                data = await getBooksByAuthor(authorQuery, page, rowsPerPage);
             } else {
-                // Fetch all books if authorQuery is empty
-                data = await getBooks(page + 1, rowsPerPage);
+                data = await getBooks(page, rowsPerPage);
             }
             setTotalBooks(data.numFound);
             const bookDetails = await Promise.all(
@@ -65,16 +85,14 @@ const BookTable = () => {
                         first_publish_year: book.first_publish_year,
                         subject: book.subject ? book.subject[0] : 'N/A',
                         author_birth_date: author.birth_date,
-                        author_top_work: author.top_work?author.top_work[0] :'N/a'
+                        author_top_work: author.top_work ? author.top_work[0] : 'N/A'
                     };
                 })
             );
-            // Clear previous data when performing a new search
-            if (authorQuery && page === 0) {
+            if (page === 1) {
                 setBooks(bookDetails);
             } else {
-                // Append new data to existing data when fetching additional pages
-                setBooks((prevBooks) => [...prevBooks, ...bookDetails]);
+                setBooks(prevBooks => [...prevBooks, ...bookDetails]);
             }
             setLoading(false);
             setFetching(false);
@@ -85,6 +103,7 @@ const BookTable = () => {
         }
     };
 
+    
     function stableSort(array, comparator) {
         const stabilizedThis = array.map((el, index) => [el, index]);
         stabilizedThis.sort((a, b) => {
@@ -111,15 +130,20 @@ const BookTable = () => {
         return 0;
     }
 
-    const handleRequestSort = (event, property) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-    // Update books array based on the sorting order
-    const sortedBooks = stableSort([...books], getComparator(order, property));
-    setBooks(sortedBooks);
-};
+  
 
+
+    const handleRequestSort = (property) => {
+        const isAsc = orderBy === property && order === 'asc';
+        setOrder(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
+        const sortedBooks = stableSort([...books], getComparator(order, property));
+        setBooks(sortedBooks);
+    };
+
+    const createSortHandler = (property) => (event) => {
+        handleRequestSort(event, property);
+    };
 
     const handleChangePage = (event, newPage) => {
         setPage(newPage);
@@ -127,23 +151,19 @@ const BookTable = () => {
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
-        setPage(0);
-    };
-
-    const createSortHandler = (property) => (event) => {
-        handleRequestSort(event, property);
-    };
-    
-    const { logout } = useAuth();
-    
-    const handleLogout = () => {
-        logout(); 
-        navigate('/login'); // Now you can use navigate here
+        setPage(1); // Reset page number when rows per page changes
     };
 
     const handleSearch = () => {
-        setPage(0); // Reset page number when performing a new search
-        fetchBooks(); // Fetch books based on the author search query
+        setPage(1); // Reset page number when performing a new search
+        fetchBooks();
+    };
+
+    const { logout } = useAuth(); 
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
     };
 
     if (loading) {
@@ -173,7 +193,8 @@ const BookTable = () => {
                 <IconButton onClick={handleSearch} aria-label="search">
                     <Search />
                 </IconButton>
-                <TableContainer>
+               
+                    <TableContainer>
                     <Table>
                         <TableHead>
                             <TableRow>
@@ -241,13 +262,14 @@ const BookTable = () => {
                             ))}
                         </TableBody>
                     </Table>
-                </TableContainer>
+                    </TableContainer>
+            
                 <TablePagination
                     rowsPerPageOptions={[10, 50, 100]}
                     component="div"
                     count={totalBooks}
                     rowsPerPage={rowsPerPage}
-                    page={page}
+                    page={page - 1} // Adjust page number for zero-based index
                     onPageChange={handleChangePage}
                     onRowsPerPageChange={handleChangeRowsPerPage}
                 />
