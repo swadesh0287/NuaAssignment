@@ -33,6 +33,7 @@ const BookTable = () => {
     const [loading, setLoading] = useState(true);
     const [authorQuery, setAuthorQuery] = useState('');
     const [fetching, setFetching] = useState(false);
+    const [editingBooks, setEditingBooks] = useState([]);
     const theme = useTheme();
     const navigate = useNavigate();
     const containerRef = useRef(null); // Ref for the container element
@@ -69,13 +70,15 @@ const BookTable = () => {
                 data.docs.map(async (book) => {
                     const author = await getAuthorDetails(book.author_key[0]);
                     return {
+                        id: book.key, // Assuming each book has a unique identifier
                         title: book.title,
                         author_name: author.name,
                         ratings_average: book.ratings_average,
                         first_publish_year: book.first_publish_year,
                         subject: book.subject ? book.subject[0] : 'N/A',
                         author_birth_date: author.birth_date,
-                        author_top_work: author.top_work ? author.top_work[0] : 'N/A'
+                        author_top_work: author.top_work ? author.top_work[0] : 'N/A',
+                        isEditing: editingBooks.includes(book.key)
                     };
                 })
             );
@@ -127,7 +130,7 @@ const BookTable = () => {
         setBooks(sortedBooks);
     };
 
-    const createSortHandler = (property) => (event) => {
+    const createSortHandler = (property) => () => {
         handleRequestSort(property);
     };
 
@@ -140,9 +143,48 @@ const BookTable = () => {
         setPage(0); // Reset page number when rows per page changes
     };
 
-    const handleSearch = () => {
-        setPage(0); // Reset page number when performing a new search
-        fetchBooks();
+    const handleSearch = async () => {
+        try {
+            setLoading(true);
+            let searchData;
+            if (authorQuery) {
+                searchData = await getBooksByAuthor(authorQuery, 1, rowsPerPage);
+            } else {
+                searchData = await getBooks(1, rowsPerPage);
+            }
+            setTotalBooks(searchData.numFound);
+            const searchResults = await Promise.all(
+                searchData.docs.map(async (book) => {
+                    const author = await getAuthorDetails(book.author_key[0]);
+                    return {
+                        id: book.key,
+                        title: book.title,
+                        author_name: author.name,
+                        ratings_average: book.ratings_average,
+                        first_publish_year: book.first_publish_year,
+                        subject: book.subject ? book.subject[0] : 'N/A',
+                        author_birth_date: author.birth_date,
+                        author_top_work: author.top_work ? author.top_work[0] : 'N/A',
+                        isEditing: editingBooks.includes(book.key)
+                    };
+                })
+            );
+            setBooks(searchResults);
+            setLoading(false);
+        } catch (error) {
+            console.error('Error fetching search results:', error);
+            setLoading(false);
+        }
+    };
+
+    const handleSearchInputChange = (event) => {
+        setAuthorQuery(event.target.value);
+    };
+
+    const handleKeyDown = (event) => {
+        if (event.key === 'Enter') {
+            handleSearch();
+        }
     };
 
     const { logout } = useAuth(); 
@@ -172,7 +214,8 @@ const BookTable = () => {
                 <TextField
                     label="Search by Author"
                     value={authorQuery}
-                    onChange={(e) => setAuthorQuery(e.target.value)}
+                    onChange={handleSearchInputChange}
+                    onKeyDown={handleKeyDown}
                     variant="outlined"
                     style={{ marginBottom: '1rem' }}
                 />
@@ -180,7 +223,7 @@ const BookTable = () => {
                     <Search />
                 </IconButton>
                
-                    <TableContainer ref={containerRef}>
+                <TableContainer ref={containerRef}>
                     <Table>
                         <TableHead>
                             <TableRow>
@@ -203,14 +246,14 @@ const BookTable = () => {
                                     </TableSortLabel>
                                 </TableCell>
                                 <TableCell>
-                                <TableSortLabel
+                                    <TableSortLabel
                                         active={orderBy === 'ratings_average'}
                                         direction={orderBy === 'ratings_average' ? order : 'asc'}
                                         onClick={createSortHandler('ratings_average')}
                                     >
                                         Ratings Average
-                                        </TableSortLabel>
-                                        </TableCell>
+                                    </TableSortLabel>
+                                </TableCell>
                                 <TableCell>
                                     <TableSortLabel
                                         active={orderBy === 'first_publish_year'}
@@ -221,16 +264,7 @@ const BookTable = () => {
                                     </TableSortLabel>
                                 </TableCell>
                                 <TableCell>Subject</TableCell>
-                                <TableCell>
-                                
-                                <TableSortLabel
-                                        active={orderBy === 'author_birth_date'}
-                                        direction={orderBy === 'author_birth_date' ? order : 'asc'}
-                                        onClick={createSortHandler('author_birth_date')}
-                                    >
-                                    Author Birth Date
-                                    </TableSortLabel>
-                                    </TableCell>
+                                <TableCell>Author Birth Date</TableCell>
                                 <TableCell>Author Top Work</TableCell>
                             </TableRow>
                         </TableHead>
@@ -248,7 +282,7 @@ const BookTable = () => {
                             ))}
                         </TableBody>
                     </Table>
-                    </TableContainer>
+                </TableContainer>
             
                 <TablePagination
                     rowsPerPageOptions={[10, 50, 100]}
