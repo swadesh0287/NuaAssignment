@@ -1,25 +1,20 @@
-import logo from './logo.svg';
-import './App.css';
+import React from 'react';
+import { useAuth } from '../src/context/AuthContext';
+import BookTable from './components/BookTable';
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
-}
+import Login from './components/Login';
+import Navbar from './components/Navbar';
+
+const App = () => {
+    const { isAuthenticated } = useAuth();
+
+    return (
+      
+        <div>
+          <Navbar/>
+            {isAuthenticated ? <BookTable /> : <Login />}
+        </div>
+    );
+};
 
 export default App;
